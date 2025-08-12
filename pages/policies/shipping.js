@@ -1,5 +1,10 @@
 import Head from 'next/head'
 
+export async function getStaticProps() {
+  // Force Next.js to pre-render this page at build time as static HTML
+  return { props: {} }
+}
+
 export default function ShippingPolicy() {
   return (
     <>
