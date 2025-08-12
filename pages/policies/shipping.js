@@ -7,7 +7,7 @@ export default function ShippingPolicy() {
         <title>Shipping & Delivery Policy | Restaurant QR App</title>
         <meta
           name="description"
-          content="Our partner restaurants aim to deliver food orders in 0-7 days. See full delivery policy."
+          content="Our partner restaurants aim to deliver food orders within 0–7 days. Read our full delivery policy."
         />
       </Head>
       <main style={{ maxWidth: 800, margin: '0 auto', padding: 20 }}>
