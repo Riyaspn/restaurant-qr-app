@@ -1,7 +1,7 @@
 import Head from 'next/head'
 
 export async function getStaticProps() {
-  // Forces Next.js to export fully static HTML with this metadata
+  // forces Next.js to pre-render this with head tags at build time
   return { props: {} }
 }
 
