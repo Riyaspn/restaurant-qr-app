@@ -1,7 +1,7 @@
 import Head from 'next/head'
 
+// ✅ This forces Next.js to export a static .html file with the <Head> content included
 export async function getStaticProps() {
-  // forces Next.js to pre-render this with head tags at build time
   return { props: {} }
 }
 
