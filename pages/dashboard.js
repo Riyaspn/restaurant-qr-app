@@ -14,8 +14,10 @@ export default function DashboardPage() {
   const [newItemName, setNewItemName] = useState('')
   const [newItemPrice, setNewItemPrice] = useState('')
 
+  // ✅ Use environment variable for base URL
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+
   useEffect(() => {
-    // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user)
@@ -25,7 +27,6 @@ export default function DashboardPage() {
       }
     })
 
-    // Check current session on mount
     ;(async () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser()
       if (currentUser) {
@@ -43,7 +44,7 @@ export default function DashboardPage() {
 
   const initializeRestaurant = async (currentUser) => {
     setLoading(true)
-    // Fetch the restaurant for this owner
+
     const { data: existingRestaurant, error: fetchError } = await supabase
       .from('restaurants')
       .select('*')
@@ -51,7 +52,6 @@ export default function DashboardPage() {
       .single()
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      // Some error other than "no rows found"
       console.error('Error fetching restaurant:', fetchError)
       setLoading(false)
       return
@@ -60,7 +60,6 @@ export default function DashboardPage() {
     let targetRestaurant = existingRestaurant
 
     if (!existingRestaurant) {
-      // No restaurant exists yet, create one
       const { data: newRestaurant, error: insertError } = await supabase
         .from('restaurants')
         .insert([{ owner_email: currentUser.email, name: 'My New Restaurant' }])
@@ -77,7 +76,6 @@ export default function DashboardPage() {
 
     setRestaurant(targetRestaurant)
 
-    // Load associated data
     await Promise.all([
       loadMenuItems(targetRestaurant.id),
       loadOrders(targetRestaurant.id)
@@ -145,10 +143,11 @@ export default function DashboardPage() {
         <button onClick={logout} style={{ padding: '5px 10px' }}>Logout</button>
       </header>
 
+      {/* ✅ Updated to use dynamic baseUrl */}
       <section style={{ marginBottom: 30 }}>
         <h2>Your QR Code URL:</h2>
         <code style={{ background: '#f0f0f0', padding: 10, display: 'block' }}>
-          http://localhost:3000/restaurants/{restaurant.id}?table=1
+          {`${baseUrl}/restaurants/${restaurant.id}?table=1`}
         </code>
         <p><small>Change <code>table=1</code> for each table.</small></p>
       </section>
