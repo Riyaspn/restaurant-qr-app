@@ -1,51 +1,101 @@
-// pages/dashboard.js
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import QRCode from 'qrcode'
+// File: pages/dashboard.js
 
-export default function Dashboard() {
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
+import { supabase } from '../services/supabase'
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const [user, setUser] = useState(null)
   const [restaurant, setRestaurant] = useState(null)
   const [menuItems, setMenuItems] = useState([])
   const [orders, setOrders] = useState([])
-  const [newItem, setNewItem] = useState({ name: '', price: '', description: '' })
-  const [qrCodes, setQrCodes] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [newItemName, setNewItemName] = useState('')
+  const [newItemPrice, setNewItemPrice] = useState('')
 
   useEffect(() => {
-    loadRestaurant()
-    loadMenuItems()
-    loadOrders()
-    const subscription = supabase
-      .channel('orders')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' },
-        (payload) => setOrders(prev => [payload.new, ...prev])
-      )
-      .subscribe()
-    return () => supabase.removeChannel(subscription)
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user)
+        initializeRestaurant(session.user)
+      } else {
+        router.push('/login')
+      }
+    })
+
+    // Check current session on mount
+    ;(async () => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (currentUser) {
+        setUser(currentUser)
+        initializeRestaurant(currentUser)
+      } else {
+        router.push('/login')
+      }
+    })()
+
+    return () => {
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
-  const loadRestaurant = async () => {
-    const restaurantId = localStorage.getItem('restaurantId')
-    if (!restaurantId) return
-    const { data } = await supabase
+  const initializeRestaurant = async (currentUser) => {
+    setLoading(true)
+    // Fetch the restaurant for this owner
+    const { data: existingRestaurant, error: fetchError } = await supabase
       .from('restaurants')
       .select('*')
-      .eq('id', restaurantId)
+      .eq('owner_email', currentUser.email)
       .single()
-    setRestaurant(data)
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // Some error other than "no rows found"
+      console.error('Error fetching restaurant:', fetchError)
+      setLoading(false)
+      return
+    }
+
+    let targetRestaurant = existingRestaurant
+
+    if (!existingRestaurant) {
+      // No restaurant exists yet, create one
+      const { data: newRestaurant, error: insertError } = await supabase
+        .from('restaurants')
+        .insert([{ owner_email: currentUser.email, name: 'My New Restaurant' }])
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error('Error creating restaurant:', insertError)
+        setLoading(false)
+        return
+      }
+      targetRestaurant = newRestaurant
+    }
+
+    setRestaurant(targetRestaurant)
+
+    // Load associated data
+    await Promise.all([
+      loadMenuItems(targetRestaurant.id),
+      loadOrders(targetRestaurant.id)
+    ])
+
+    setLoading(false)
   }
 
-  const loadMenuItems = async () => {
-    const restaurantId = localStorage.getItem('restaurantId')
+  const loadMenuItems = async (restaurantId) => {
     const { data } = await supabase
       .from('menu_items')
       .select('*')
       .eq('restaurant_id', restaurantId)
-      .order('created_at', { ascending: false })
+      .order('created_at')
     setMenuItems(data || [])
   }
 
-  const loadOrders = async () => {
-    const restaurantId = localStorage.getItem('restaurantId')
+  const loadOrders = async (restaurantId) => {
     const { data } = await supabase
       .from('orders')
       .select('*')
@@ -56,62 +106,136 @@ export default function Dashboard() {
 
   const addMenuItem = async (e) => {
     e.preventDefault()
-    const restaurantId = localStorage.getItem('restaurantId')
-    await supabase.from('menu_items').insert([{
-      restaurant_id: restaurantId,
-      name: newItem.name,
-      price: parseFloat(newItem.price),
-      description: newItem.description
-    }])
-    setNewItem({ name: '', price: '', description: '' })
-    loadMenuItems()
+    if (!newItemName.trim() || isNaN(parseFloat(newItemPrice))) return
+
+    await supabase
+      .from('menu_items')
+      .insert([{ restaurant_id: restaurant.id, name: newItemName.trim(), price: parseFloat(newItemPrice) }])
+
+    setNewItemName('')
+    setNewItemPrice('')
+    loadMenuItems(restaurant.id)
   }
 
-  const generateQR = async (tableNumber) => {
-    const url = `${window.location.origin}/menu/${restaurant.id}/${tableNumber}`
-    const qrDataURL = await QRCode.toDataURL(url)
-    setQrCodes(prev => ({ ...prev, [tableNumber]: qrDataURL }))
+  const toggleItemAvailability = async (item) => {
+    await supabase
+      .from('menu_items')
+      .update({ available: !item.available })
+      .eq('id', item.id)
+    loadMenuItems(restaurant.id)
   }
 
-  if (!restaurant) return <p>Loading...</p>
+  const logout = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  if (loading) {
+    return <div style={{ padding: 20 }}>Loading...</div>
+  }
+
+  if (!restaurant) {
+    return <div style={{ padding: 20 }}>No restaurant data available.</div>
+  }
 
   return (
-    <div style={{ maxWidth: 1200, margin: '20px auto', padding: 20 }}>
-      <h1>🏪 {restaurant.name} Dashboard</h1>
+    <div style={{ maxWidth: 1000, margin: '0 auto', padding: 20 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h1>{restaurant.name} - Dashboard</h1>
+        <button onClick={logout} style={{ padding: '5px 10px' }}>Logout</button>
+      </header>
 
-      {/* Menu Items */}
-      <section style={{ marginTop: 30 }}>
-        <h2>Menu Items</h2>
-        <form onSubmit={addMenuItem} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <input placeholder="Name" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
-          <input placeholder="Price" type="number" step="0.01" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
-          <input placeholder="Description" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} />
-          <button type="submit">Add Item</button>
-        </form>
-        <ul>
-          {menuItems.map(item => (
-            <li key={item.id}>{item.name} — ₹{item.price}</li>
-          ))}
-        </ul>
+      <section style={{ marginBottom: 30 }}>
+        <h2>Your QR Code URL:</h2>
+        <code style={{ background: '#f0f0f0', padding: 10, display: 'block' }}>
+          http://localhost:3000/restaurants/{restaurant.id}?table=1
+        </code>
+        <p><small>Change <code>table=1</code> for each table.</small></p>
       </section>
 
-      {/* QR Codes */}
-      <section style={{ marginTop: 30 }}>
-        <h2>Generate QR Codes</h2>
-        {[1,2,3,4,5].map(table => (
-          <div key={table} style={{ display: 'inline-block', margin: 10, textAlign: 'center' }}>
-            <button onClick={() => generateQR(table)}>Table {table}</button>
-            {qrCodes[table] && <img src={qrCodes[table]} alt={`QR ${table}`} width={100} />}
+      <section style={{ marginBottom: 30 }}>
+        <h2>Add Menu Item</h2>
+        <form onSubmit={addMenuItem} style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <input
+            type="text"
+            placeholder="Item name"
+            value={newItemName}
+            onChange={(e) => setNewItemName(e.target.value)}
+            style={{ padding: 8, flex: 1 }}
+          />
+          <input
+            type="number"
+            placeholder="Price"
+            step="0.01"
+            value={newItemPrice}
+            onChange={(e) => setNewItemPrice(e.target.value)}
+            style={{ padding: 8, width: 100 }}
+          />
+          <button type="submit" style={{ padding: '8px 16px' }}>Add Item</button>
+        </form>
+      </section>
+
+      <section style={{ marginBottom: 30 }}>
+        <h2>Menu Items ({menuItems.length})</h2>
+        {menuItems.map(item => (
+          <div
+            key={item.id}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 10,
+              border: '1px solid #ddd',
+              marginBottom: 10
+            }}
+          >
+            <div>
+              <strong>{item.name}</strong> - ₹{item.price.toFixed(2)}
+              <span style={{ marginLeft: 10, color: item.available ? 'green' : 'red' }}>
+                {item.available ? '✓ Available' : '✗ Out of Stock'}
+              </span>
+            </div>
+            <button
+              onClick={() => toggleItemAvailability(item)}
+              style={{
+                padding: '5px 10px',
+                background: item.available ? '#ff4444' : '#44aa44',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4
+              }}
+            >
+              {item.available ? 'Mark Out of Stock' : 'Mark Available'}
+            </button>
           </div>
         ))}
       </section>
 
-      {/* Orders */}
-      <section style={{ marginTop: 30 }}>
-        <h2>Recent Orders</h2>
-        {orders.map(o => (
-          <div key={o.id} style={{ border: '1px solid #ccc', margin: 5, padding: 10 }}>
-            <strong>Table {o.table_number}</strong> — ₹{o.total}
+      <section>
+        <h2>Recent Orders ({orders.length})</h2>
+        {orders.map(order => (
+          <div
+            key={order.id}
+            style={{
+              padding: 15,
+              border: '1px solid #ddd',
+              borderRadius: 4,
+              marginBottom: 10
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <strong>Table {order.table_number}</strong>
+              <strong>₹{order.total.toFixed(2)}</strong>
+            </div>
+            <div style={{ marginBottom: 10 }}>Status: <strong>{order.status}</strong></div>
+            <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
+              {new Date(order.created_at).toLocaleString()}
+            </div>
+            <ul style={{ paddingLeft: 20, margin: 0 }}>
+              {order.items.map((it, idx) => (
+                <li key={idx}>{it.name} ×{it.qty} — ₹{(it.price * it.qty).toFixed(2)}</li>
+              ))}
+            </ul>
           </div>
         ))}
       </section>
