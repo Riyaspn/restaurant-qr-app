@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
 import { supabase } from '../services/supabase'
 
 export default function SignupPage() {
@@ -69,7 +70,7 @@ export default function SignupPage() {
         </div>
       )}
       
-      <p>Already have an account? <a href="/login">Login here</a></p>
+      <p>Already have an account? <Link href="/login">Login here</Link></p>
     </div>
   )
 }
