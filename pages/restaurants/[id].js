@@ -52,7 +52,6 @@ export default function RestaurantPage({ restaurant, menuItems, tableNumber }) {
     const taxAmount = (subtotal * (restaurant.tax_rate || 0)) / 100
     const finalTotal = subtotal + taxAmount
     const itemCount = items.reduce((sum, i) => sum + cart[i.id], 0)
-
     return {
       items,
       subtotal: subtotal.toFixed(2),
@@ -159,7 +158,6 @@ export default function RestaurantPage({ restaurant, menuItems, tableNumber }) {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: 20 }}>
       <h1>{restaurant.name} - Menu</h1>
-
       <div style={{ margin: '20px 0' }}>
         <label>
           Table Number:{' '}
@@ -171,7 +169,6 @@ export default function RestaurantPage({ restaurant, menuItems, tableNumber }) {
           />
         </label>
       </div>
-
       {!showPayment ? (
         <>
           {menuItems.length === 0 && <p>No menu items available.</p>}
@@ -184,7 +181,6 @@ export default function RestaurantPage({ restaurant, menuItems, tableNumber }) {
               {cart[item.id] && <span style={{ marginLeft: 8 }}>×{cart[item.id]}</span>}
             </div>
           ))}
-
           {totals.itemCount > 0 && (
             <div style={{ marginTop: 20 }}>
               <p>Subtotal: ₹{totals.subtotal}</p>
@@ -221,7 +217,6 @@ export default function RestaurantPage({ restaurant, menuItems, tableNumber }) {
               onChange={() => setMethod('upi')}
             /> Pay by UPI
           </label>
-
           {method === 'cash' ? (
             <button
               onClick={confirmCashOrder}
