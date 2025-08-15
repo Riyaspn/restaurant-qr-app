@@ -1,0 +1,23 @@
+[
+  {
+    "id": "rest1",
+    "name": "ABC Restaurant",
+    "menuItems": [
+      { "name": "Paneer Butter Masala", "price": 250 },
+      { "name": "Tandoori Roti", "price": 20 },
+      { "name": "Dal Makhani", "price": 200 }
+    ],
+    "upiId": "abcrestaurant@upi",
+    "upiQrImage": "/qrcodes/abc_qr.png"
+  },
+  {
+    "id": "rest2",
+    "name": "XYZ Diner",
+    "menuItems": [
+      { "name": "Veg Biryani", "price": 180 },
+      { "name": "Gulab Jamun", "price": 50 }
+    ],
+    "upiId": "xyzdiner@okaxis",
+    "upiQrImage": "/qrcodes/xyz_qr.png"
+  }
+]
