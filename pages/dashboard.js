@@ -14,7 +14,6 @@ export default function DashboardPage() {
   const [newItemName, setNewItemName] = useState('')
   const [newItemPrice, setNewItemPrice] = useState('')
 
-  // ✅ Use environment variable for base URL
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
   useEffect(() => {
@@ -44,7 +43,6 @@ export default function DashboardPage() {
 
   const initializeRestaurant = async (currentUser) => {
     setLoading(true)
-
     const { data: existingRestaurant, error: fetchError } = await supabase
       .from('restaurants')
       .select('*')
@@ -58,14 +56,12 @@ export default function DashboardPage() {
     }
 
     let targetRestaurant = existingRestaurant
-
     if (!existingRestaurant) {
       const { data: newRestaurant, error: insertError } = await supabase
         .from('restaurants')
         .insert([{ owner_email: currentUser.email, name: 'My New Restaurant' }])
         .select()
         .single()
-
       if (insertError) {
         console.error('Error creating restaurant:', insertError)
         setLoading(false)
@@ -75,12 +71,10 @@ export default function DashboardPage() {
     }
 
     setRestaurant(targetRestaurant)
-
     await Promise.all([
       loadMenuItems(targetRestaurant.id),
       loadOrders(targetRestaurant.id)
     ])
-
     setLoading(false)
   }
 
@@ -105,11 +99,9 @@ export default function DashboardPage() {
   const addMenuItem = async (e) => {
     e.preventDefault()
     if (!newItemName.trim() || isNaN(parseFloat(newItemPrice))) return
-
     await supabase
       .from('menu_items')
       .insert([{ restaurant_id: restaurant.id, name: newItemName.trim(), price: parseFloat(newItemPrice) }])
-
     setNewItemName('')
     setNewItemPrice('')
     loadMenuItems(restaurant.id)
@@ -128,10 +120,17 @@ export default function DashboardPage() {
     router.push('/login')
   }
 
+  const markCashCollected = async (orderId) => {
+    await supabase
+      .from('orders')
+      .update({ payment_status: 'completed' })
+      .eq('id', orderId)
+    loadOrders(restaurant.id)
+  }
+
   if (loading) {
     return <div style={{ padding: 20 }}>Loading...</div>
   }
-
   if (!restaurant) {
     return <div style={{ padding: 20 }}>No restaurant data available.</div>
   }
@@ -143,13 +142,12 @@ export default function DashboardPage() {
         <button onClick={logout} style={{ padding: '5px 10px' }}>Logout</button>
       </header>
 
-      {/* ✅ Updated to use dynamic baseUrl */}
       <section style={{ marginBottom: 30 }}>
         <h2>Your QR Code URL:</h2>
         <code style={{ background: '#f0f0f0', padding: 10, display: 'block' }}>
           {`${baseUrl}/restaurants/${restaurant.id}?table=1`}
         </code>
-        <p><small>Change <code>table=1</code> for each table.</small></p>
+        <p><small>Change <code>table=1</code> for each table number.</small></p>
       </section>
 
       <section style={{ marginBottom: 30 }}>
@@ -189,7 +187,7 @@ export default function DashboardPage() {
             }}
           >
             <div>
-              <strong>{item.name}</strong> - ₹{item.price.toFixed(2)}
+              <strong>{item.name}</strong> – ₹{item.price.toFixed(2)}
               <span style={{ marginLeft: 10, color: item.available ? 'green' : 'red' }}>
                 {item.available ? '✓ Available' : '✗ Out of Stock'}
               </span>
@@ -212,31 +210,39 @@ export default function DashboardPage() {
 
       <section>
         <h2>Recent Orders ({orders.length})</h2>
-        {orders.map(order => (
-          <div
-            key={order.id}
-            style={{
-              padding: 15,
-              border: '1px solid #ddd',
-              borderRadius: 4,
-              marginBottom: 10
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-              <strong>Table {order.table_number}</strong>
-              <strong>₹{order.total.toFixed(2)}</strong>
-            </div>
-            <div style={{ marginBottom: 10 }}>Status: <strong>{order.status}</strong></div>
-            <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
-              {new Date(order.created_at).toLocaleString()}
-            </div>
-            <ul style={{ paddingLeft: 20, margin: 0 }}>
-              {order.items.map((it, idx) => (
-                <li key={idx}>{it.name} ×{it.qty} — ₹{(it.price * it.qty).toFixed(2)}</li>
-              ))}
-            </ul>
-          </div>
-        ))}
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ borderBottom: '1px solid #ccc', padding: 8 }}>Table</th>
+              <th style={{ borderBottom: '1px solid #ccc', padding: 8 }}>Items</th>
+              <th style={{ borderBottom: '1px solid #ccc', padding: 8 }}>Total</th>
+              <th style={{ borderBottom: '1px solid #ccc', padding: 8 }}>Method</th>
+              <th style={{ borderBottom: '1px solid #ccc', padding: 8 }}>Status</th>
+              <th style={{ borderBottom: '1px solid #ccc', padding: 8 }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(order => (
+              <tr key={order.id}>
+                <td style={{ borderBottom: '1px solid #eee', padding: 8 }}>{order.table_number}</td>
+                <td style={{ borderBottom: '1px solid #eee', padding: 8 }}>{order.items.length}</td>
+                <td style={{ borderBottom: '1px solid #eee', padding: 8 }}>₹{order.total.toFixed(2)}</td>
+                <td style={{ borderBottom: '1px solid #eee', padding: 8 }}>{order.payment_method.toUpperCase()}</td>
+                <td style={{ borderBottom: '1px solid #eee', padding: 8 }}>{order.payment_status}</td>
+                <td style={{ borderBottom: '1px solid #eee', padding: 8 }}>
+                  {order.payment_method === 'cash' && order.payment_status === 'pending' && (
+                    <button
+                      onClick={() => markCashCollected(order.id)}
+                      style={{ padding: '4px 8px' }}
+                    >
+                      Mark Paid
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
     </div>
   )
